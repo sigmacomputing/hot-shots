@@ -79,6 +79,33 @@ describe('#globalTags', () => {
         });
       });
 
+      it('only global tags - array, no metric tags', done => {
+        server = createServer(serverType, opts => {
+          statsd = createHotShotsClient(Object.assign(opts, {
+            global_tags: ['gtag:1', 'gtag:2', 'bar'],
+          }), clientType);
+          statsd.increment('test', 1337, {});
+        });
+        server.on('metrics', metrics => {
+          assert.strictEqual(metrics, `test:1337|c|#gtag:1,gtag:2,bar${metricEnd}`);
+          done();
+        });
+      });
+
+      it('only global tags - object, no metric tags', done => {
+        server = createServer(serverType, opts => {
+          statsd = createHotShotsClient(Object.assign(opts, {
+            global_tags: { gtag: 1, gtagb: 2, }
+          }), clientType);
+          statsd.increment('test', 1337, {});
+        });
+        server.on('metrics', metrics => {
+          assert.strictEqual(metrics, `test:1337|c|#gtag:1,gtagb:2${metricEnd}`);
+          done();
+        });
+      });
+
+
       it('should override global tags with metric tags', done => {
         server = createServer(serverType, opts => {
           statsd = createHotShotsClient(Object.assign(opts, {

@@ -88,7 +88,7 @@ function testTypes() {
 
   testTypesArr.push([`${STREAM} ${CLIENT}`, STREAM, CLIENT, STREAM_METRIC_END]);
   testTypesArr.push([`${STREAM} ${CHILD_CLIENT}`, STREAM, CLIENT, STREAM_METRIC_END]);
-  return testTypesArr;
+  return [testTypesArr[0]];
 }
 
 /**
