@@ -1,5 +1,6 @@
 const assert = require('assert');
 const helpers = require('./helpers/helpers.js');
+const libHelpers = require('../lib/helpers.js');
 
 const closeAll = helpers.closeAll;
 const testTypes = helpers.testTypes;
@@ -230,5 +231,112 @@ describe('#globalTags', () => {
         });
       });
     });
+  });
+});
+
+describe('#globalTags performance benchmarks', () => {
+  function time(f, iterations, opName) {
+    const startTime = process.hrtime.bigint();
+    for (let i = 0; i < iterations; ++i) {
+      f();
+    }
+    const endTime = process.hrtime.bigint();
+    const elapsedMs = Number(endTime - startTime) / 1e6;
+    console.log(opName + ' performance benchmark: %d ms', elapsedMs);
+
+  }
+  it('adhoc performance benchmark - overrideTags', () => {
+    const globalTags = { gtag: '123', foo: 'bar', dfjkserhu: 'fasdfheasdf', sdfygthsf: 'asdfuhtbhadsf', aslfkah4thutuehtrheu: 'asdfhasuihetlhstjlkfsjlk;f' };
+    const tags = { gtag: '234', asdfwer: 'weradfsdsf',  foo: 'bar', asfiehtjasdflksf: 'asdfkljfeuhtbasf', bbuhrewiuhfasknjasdflkjsdfjlksdfjlkafdsljkadsfjlkdfsjlkdfsjlfsjlkfdsjlkdsfjlkdsfjlkdfsljkadfshkaghk: 'asdfuhthb', asdfhjkasdfhjafsjlhfdsjlfd: 'ashdfhuaewrlhkjareshljkarshjklfdshklj', asflkjasdfhjhthiuatwekjhashfkjlf: 'asdfhhkuawrehljkatelhkjatslhkjfshlk' };
+    const ITERATIONS = 100;
+
+    const fakeMemo = JSON.stringify(globalTags);
+    const formattedGlobalTags =  libHelpers.formatTags(globalTags, false);
+    time(() => {
+      libHelpers.overrideTags(formattedGlobalTags, tags, false);
+    }, ITERATIONS, 'overrideTags');
+
+    time(() => {
+      libHelpers.overrideTags2(globalTags, tags, false);
+    }, ITERATIONS, 'overrideTags2');
+
+    time(() => {
+      libHelpers.overrideTags5(globalTags, fakeMemo, tags, false);
+    }, ITERATIONS, 'overrideTags5');
+    time(() => {
+      libHelpers.overrideTags3(globalTags, tags, false);
+    }, ITERATIONS, 'overrideTags3');
+    time(() => {
+      libHelpers.overrideTags4(globalTags,  tags, false);
+    }, ITERATIONS, 'overrideTags4');
+
+  });
+  it('adhoc performance benchmark - serializeTags', () => {
+    const strings = ['ahsdf', 'asdfgyiaestiyaser', 'asf@fsadf', 'asdfkjlsdf,asdf'];
+    const ITERATIONS = 1000000;
+
+    time(() => {
+      for (const x of strings) {
+        libHelpers.sanitizeTags(x, false);
+      }
+    }, ITERATIONS, 'sanitizeTags');
+
+    time(() => {
+      for (const x of strings) {
+        libHelpers.sanitizeTags2(x, false);
+      }
+    }, ITERATIONS, 'sanitizeTags2');
+  });
+  it('adhoc performance benchmark - string joins', () => {
+    // const strings = ['ahsdf', 'asdfgyiaestiyaser', 'asf@fsadf', 'asdfkjlsdf,asdf', 'asdfkljserh', 'asdfhubgsdfhjfsd', 'abkjateghiufsdkhjf', 'giyasefhfdbh'];
+    const fakeTags = { gtag: '123', foo: 'bar', dfjkserhu: 'fasdfheasdf', sdfygthsf: 'asdfuhtbhadsf', aslfkah4thutuehtrheu: 'asdfhasuihetlhstjlkfsjlk;f', asdfljhsdf: 'asdfjkhsghjastej' };
+    const ITERATIONS = 1000000;
+
+    time(() => {
+      let arr = '';
+      for (const x of Object.keys(fakeTags)) {
+        arr = arr.concat(x);
+      }
+    }, ITERATIONS, 'string concat');
+    time(() => {
+      const arr = [];
+      for (const x of Object.keys(fakeTags)) {
+        arr.push(x);
+      }
+      const x = arr.join(',');
+    }, ITERATIONS, 'arrayJoin');
+
+  });
+  it('adhoc performance benchmark - concat vs no concat', () => {
+    // const strings = ['ahsdf', 'asdfgyiaestiyaser', 'asf@fsadf', 'asdfkjlsdf,asdf', 'asdfkljserh', 'asdfhubgsdfhjfsd', 'abkjateghiufsdkhjf', 'giyasefhfdbh'];
+    // const fakeTags = { gtag: '123', foo: 'bar', dfjkserhu: 'fasdfheasdf', sdfygthsf: 'asdfuhtbhadsf', aslfkah4thutuehtrheu: 'asdfhasuihetlhstjlkfsjlk;f', asdfljhsdf: 'asdfjkhsghjastej' };
+    const ITERATIONS = 1000000;
+
+    time(() => {
+      const x = 'asdfkljsflkjsadflkjsdfkljsdfa';
+      const y = 'asdflkjfdljdfss' + x;
+      if (y.length !== 44) {
+        throw new Error('bad');
+      }
+    }, ITERATIONS, 'concat');
+    time(() => {
+      const y = 'asdflkjfdljdfssasdfkljsflkjsadflkjsdfkljsdfa';
+      if (y.length !== 44) {
+        throw new Error('bad');
+      }
+    }, ITERATIONS, 'no concat');
+  });
+  it('adhoc performance benchmark - concat vs no concat 2', () => {
+    // const strings = ['ahsdf', 'asdfgyiaestiyaser', 'asf@fsadf', 'asdfkjlsdf,asdf', 'asdfkljserh', 'asdfhubgsdfhjfsd', 'abkjateghiufsdkhjf', 'giyasefhfdbh'];
+    // const fakeTags = { gtag: '123', foo: 'bar', dfjkserhu: 'fasdfheasdf', sdfygthsf: 'asdfuhtbhadsf', aslfkah4thutuehtrheu: 'asdfhasuihetlhstjlkfsjlk;f', asdfljhsdf: 'asdfjkhsghjastej' };
+    const ITERATIONS = 1000000;
+
+    time(() => {
+      const x = 'asdfkljsflkjsadflkjsdfkljsdfa';
+      const y = 'asdflkjfdljdfss' + x;
+      if (y.length !== 44) {
+        throw new Error('bad');
+      }
+    }, ITERATIONS, 'concat');
   });
 });
