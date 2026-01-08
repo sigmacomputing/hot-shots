@@ -1,7 +1,71 @@
 CHANGELOG
 =========
 
-## 10.0 (2023-2-3)
+## 12.1.0 (2026-1-4)
+
+* @bdeitte Add client-side telemetry support with `includeDatadogTelemetry` option (disabled by default and in beta) and telemetryFlushInterval
+
+## 12.0.0 (2025-12-16)
+
+* @bdeitte event calls now use prefix and suffix
+* @bdeitte mock mode no longer creates a socket
+* @bdeitte using an IP no longer invokes DNS lookup
+* @bdeitte client close no longer fails when errorHandler is defined but socket is null
+* @bdeitte tags ending with '\\' no longer breaks telegraph
+
+## 11.4.0 (2025-12-7)
+
+* @bdeitte Add debug logging that can be enabled with "NODE_DEBUG=hot-shots"
+
+## 11.3.0 (2025-11-30)
+
+* @bdeitte Revert some buffering code to fix tag duplication issue seen with Datadog
+
+## 11.2.0 (2025-8-23)
+
+* @manishrjain Add retry mechanism for UDS with udsRetryOptions
+
+## 11.1.1 (2025-8-10)
+
+* @bdeitte Revert change to improve memory/performance of overrideTags and add more tests
+* @bdeitte Upgrade node-unix-dram to support latest Node
+
+## 11.1.0 (2025-6-22)
+
+* @bdeitte Add more tests for uncovered areas
+* @bdeitte When DD_AGENT_HOST is set to empty string, consider it to be undefined
+* @bdeitte Set max size for maxBufferSize to 8192 when using UDS
+* @bdeitte Improve memory/performance of overrideTags (reverted in 11.1.1)
+
+## 11.0.0 (2025-6-20)
+
+* @bdeitte Stop testing much older Node.js versions and test latest: now testing Node 16 to Node 24
+* @bdeitte Enable buffering by default (as 8192) for UDS connections
+* @bdeitte Stop adding extra newline in buffering cases where it's not needed
+* @bdeitte Flush buffering earlier when possible (reverted in 11.3.0)
+* @bdeitte Add CLAUDE.md for easlier Claude usage
+* @bdeitte Ensure client.close() does not throws errors when mock: true is set
+
+## 10.2.1 (2024-10-19)
+
+* @thiago-negri Add 'includeDataDogTags' property to 'ClientOptions' type
+
+## 10.2.0 (2024-10-13)
+
+* @thiago-negri Add option 'includeDataDogTags'
+* @bdeitte Upgrade dependencies for security warning and a few README updates
+
+## 10.1.1 (2024-9-12)
+
+* @matteosb Handle synchronous socket.send error in sendUsingDnsCache
+
+## 10.1.0 (2024-9-6)
+
+* @lachlankidson Add gaugeDelta function
+* @bdeitte Various dev library updates
+* @bdeitte Add Node 20 testing
+
+## 10.0.0 (2023-2-3)
 * @imyourmanzi In TypeScript, narrow callback parameter types
 * @bdeitte Remove Node 8 from supported list and add testing of Node 18
 
