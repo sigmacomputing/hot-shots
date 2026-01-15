@@ -4,21 +4,24 @@ A Node.js client for [Etsy](http://etsy.com)'s [StatsD](https://github.com/etsy/
 
 This project was originally a fork off of [node-statsd](https://github.com/sivy/node-statsd).  This project
 includes all changes in the latest node-statsd and many additional changes, including:
+* uds (Unix domain socket) protocol support
+* raw stream protocol support
 * TypeScript types
 * Telegraf support
 * events
 * child clients
 * tcp protocol support
-* uds (Unix domain socket) protocol support
-* raw stream protocol support
 * mock mode
 * asyncTimer
 * asyncDistTimer
+* debug logging
 * much more, including many bug fixes
 
-hot-shots supports Node 10.x and higher.
+You can read about all changes in [the changelog](CHANGES.md).
 
-![Build Status](https://github.com/brightcove/hot-shots/actions/workflows/node.js.yml/badge.svg)
+hot-shots supports Node 16.x and higher.
+
+![Build Status](https://github.com/bdeitte/hot-shots/actions/workflows/node-test.js.yml/badge.svg)
 
 ## Usage
 
@@ -37,15 +40,16 @@ Parameters (specified as one object passed into hot-shots):
 * `cacheDns`:    Caches dns lookup to *host* for *cacheDnsTtl*, only used
   when protocol is `udp`, `default: false`
 * `cacheDnsTtl`: time-to-live of dns lookups in milliseconds, when *cacheDns* is enabled. `default: 60000`
-* `mock`:        Create a mock StatsD instance, sending no stats to
-  the server and allowing data to be read from mockBuffer.  Note that
+* `mock`:        Create a mock StatsD instance, using a mock transport that doesn't create real sockets.
+  Stats are not sent to the server but can be read from mockBuffer for testing.  Note that
   mockBuffer will keep growing, so only use for testing or clear out periodically. `default: false`
-* `globalTags`:  Tags that will be added to every metric. Can be either an object or list of tags. `default: {}`. The following *Datadog* tags are appended to `globalTags` from the corresponding environment variable if the latter is set:
+* `globalTags`:  Tags that will be added to every metric. Can be either an object or list of tags. `default: {}`.
+* `includeDataDogTags`: Whether to include DataDog tags to the global tags. `default: true`. The following *Datadog* tags are appended to `globalTags` from the corresponding environment variable if the latter is set:
   * `dd.internal.entity_id` from `DD_ENTITY_ID` ([docs](https://docs.datadoghq.com/developers/dogstatsd/?tab=kubernetes#origin-detection-over-udp))
   * `env` from `DD_ENV` ([docs](https://docs.datadoghq.com/getting_started/tagging/unified_service_tagging/?tab=kubernetes#full-configuration))
   * `service` from `DD_SERVICE` ([docs](https://docs.datadoghq.com/getting_started/tagging/unified_service_tagging/?tab=kubernetes#full-configuration))
   * `version` from `DD_VERSION` ([docs](https://docs.datadoghq.com/getting_started/tagging/unified_service_tagging/?tab=kubernetes#full-configuration))
-* `maxBufferSize`: If larger than 0,  metrics will be buffered and only sent when the string length is greater than the size. `default: 0`
+* `maxBufferSize`: If larger than 0,  metrics will be buffered and only sent when the string length is greater than the size. `default: 0` for udp and tcp.  `default: 8192` for uds.
 * `bufferFlushInterval`: If buffering is in use, this is the time in ms to always flush any buffered metrics. `default: 1000`
 * `telegraf`:    Use Telegraf's StatsD line protocol, which is slightly different than the rest `default: false`
 * `sampleRate`:    Sends only a sample of data to StatsD for all StatsD methods.  Can be overridden at the method level. `default: 1`
@@ -59,7 +63,14 @@ Parameters (specified as one object passed into hot-shots):
 * `udsGracefulErrorHandling`: Used only when the protocol is `uds`. Boolean indicating whether to handle socket errors gracefully. Defaults to true.
 * `udsGracefulRestartRateLimit`: Used only when the protocol is `uds`. Time (ms) between re-creating the socket. Defaults to `1000`.
 * `closingFlushInterval`: Before closing, StatsD will check for inflight messages. Time (ms) between each check. Defaults to `50`.
-* `udpSocketOptions`: Used only when the protocol is `uds`. Specify the options passed into dgram.createSocket(). Defaults to `{ type: 'udp4' }`
+* `udsRetryOptions`: Used only when the protocol is `uds`. Retry/backoff options for UDS sends:
+  * `retries`: Number of retry attempts for failed packet sends. Defaults to `3`.
+  * `retryDelayMs`: Initial delay in milliseconds before retrying a failed packet send. Defaults to `100`.
+  * `maxRetryDelayMs`: Maximum delay in milliseconds between retry attempts (caps exponential backoff). Defaults to `1000`.
+  * `backoffFactor`: Exponential backoff multiplier for retry delays. Defaults to `2`.
+* `udpSocketOptions`: Used only when the protocol is `udp`. Specify the options passed into dgram.createSocket(). Defaults to `{ type: 'udp4' }`
+* `includeDatadogTelemetry`: Enable client-side telemetry to track metrics about the client itself. This helps diagnose high-throughput metric delivery issues. Telemetry metrics are prefixed with `datadog.dogstatsd.client.` and are not billed as custom metrics. `default: false`. See [Client-Side Telemetry](#client-side-telemetry) for details.
+* `telemetryFlushInterval`: When telemetry is enabled, how often (in ms) to send telemetry metrics. `default: 10000`
 
 ### StatsD methods
 All StatsD methods other than `event`, `close`, and `check` have the same API:
@@ -127,6 +138,10 @@ The check method has the following API:
   // Gauge: Gauge a stat by a specified amount
   client.gauge('my_gauge', 123.45);
 
+  // Gauge: Gauge a stat by a specified amount, but change it rather than setting it
+  client.gaugeDelta('my_gauge', -10);
+  client.gaugeDelta('my_gauge', 4);
+
   // Set: Counts unique occurrences of a stat (alias of unique)
   client.set('my_unique', 'foobar');
   client.unique('my_unique', 'foobarbaz');
@@ -166,6 +181,11 @@ The check method has the following API:
 
   // Timing: also accepts a Date object of which the difference is calculated
   client.timing('response_time', new Date());
+
+  // Timing: measuring elapsed time with Date.now()
+  var startTime = Date.now();
+  // ... your code here ...
+  client.timing('response_time', Date.now() - startTime);
 
   // Timer: Returns a function that you call to record how long the first
   // parameter takes to execute (in milliseconds) and then sends that value
@@ -214,6 +234,19 @@ The check method has the following API:
   client.close(function(err) {
     console.log('The close did not work quite right: ', err);
   });
+
+  // UDS client with automatic retry on packet failures
+  var client = new StatsD({
+      protocol: 'uds',
+      path: '/var/run/datadog/dsd.socket',
+      udsRetryOptions: {
+        // Retry options (all optional, showing defaults):
+        // retries: 3,           // Number of retry attempts (set to 0 to disable)
+        // retryDelayMs: 100,    // Initial delay in ms
+        // maxRetryDelayMs: 1000,// Maximum delay cap in ms
+        // backoffFactor: 2      // Exponential backoff multiplier
+      }
+  });
 ```
 
 ## DogStatsD and Telegraf functionality
@@ -226,6 +259,8 @@ Some of the functionality mentioned above is specific to DogStatsD or Telegraf. 
 * histogram method- DogStatsD or Telegraf
 * event method- DogStatsD
 * check method- DogStatsD
+* includeDatadogTelemetry parameter- DogStatsD
+* telemetryFlushInterval parameter- DogStatsD
 
 ## Errors
 
@@ -255,6 +290,15 @@ it is probably because you are sending large volumes of metrics to a single agen
 This error only arises when using the UDS protocol and means that packages are being dropped.
 Take a look at the [Datadog docs](https://docs.datadoghq.com/developers/dogstatsd/high_throughput/?#over-uds-unix-domain-socket) for some tips on tuning your connection.
 
+## Debugging
+
+If you're having issues with metrics not being sent or want to understand what hot-shots is doing
+in detail, you can enable debug logging using Node.js's built-in `NODE_DEBUG` environment variable:
+
+```bash
+NODE_DEBUG=hot-shots node your-app.js
+```
+
 ## Unix domain socket support
 
 The 'uds' option as the protocol is to support [Unix Domain Sockets for Datadog](https://docs.datadoghq.com/developers/dogstatsd/unix_socket/).  It has the following limitations:
@@ -269,11 +313,45 @@ optionalDependency, and how it's used in the codebase, this install
 failure will not cause any problems.  It only means that you can't use
 the uds feature.
 
-## Migrating from node-statsd
+## Datadog Telemetry
 
-You should only need to do one thing: change node-statsd to hot-shots in all requires.
+When `includeDatadogTelemetry` is enabled, the client automatically sends telemetry metrics about itself to help diagnose metric delivery issues in high-throughput scenarios. This feature should matche the behavior of official Datadog clients as described in [the docs](https://docs.datadoghq.com/developers/dogstatsd/high_throughput/?tab=go#client-side-telemetry).
 
-You can check the detailed [change log](https://github.com/brightcove/hot-shots/blob/master/CHANGES.md) for what has changed since the last release of node-statsd.
+Telemetry is automatically disabled when using `mock: true`, `telegraf: true`, or in child clients.
+
+### Telemetry Metrics
+
+The following metrics are sent every `telemetryFlushInterval` milliseconds (default: 10 seconds):
+
+| Metric | Description |
+|--------|-------------|
+| `datadog.dogstatsd.client.metrics` | Total number of metrics sent |
+| `datadog.dogstatsd.client.metrics_by_type` | Metrics broken down by type (gauge, count, set, timing, histogram, distribution) |
+| `datadog.dogstatsd.client.events` | Total number of events sent |
+| `datadog.dogstatsd.client.service_checks` | Total number of service checks sent |
+| `datadog.dogstatsd.client.bytes_sent` | Total bytes successfully sent |
+| `datadog.dogstatsd.client.bytes_dropped` | Total bytes dropped |
+| `datadog.dogstatsd.client.packets_sent` | Total packets successfully sent |
+| `datadog.dogstatsd.client.packets_dropped` | Total packets dropped |
+
+The `metric_dropped_on_receive` from the official Datadog clients is intentionally omitted. That metric tracks drops on an internal receive channel, which doesn't apply to hot-shots' architecture. Also `bytes_dropped_queue` is omitted as this also didn't fit into how hot-shots works.
+
+### Telemetry Tags
+
+All telemetry metrics include these tags:
+* `client:nodejs` - Identifies the hot-shots client
+* `client_version:<version>` - The hot-shots version
+* `client_transport:<protocol>` - The transport protocol (udp, tcp, uds, stream)
+
+### Example
+
+```javascript
+var client = new StatsD({
+  host: 'localhost',
+  includeDatadogTelemetry: true,
+  telemetryFlushInterval: 10000  // Optional, default is 10 seconds
+});
+```
 
 ## Submitting changes
 
@@ -293,14 +371,6 @@ When you've done all this we're happy to try to get this merged in right away.
 Versions will attempt to follow semantic versioning, with major changes only coming in major versions.
 
 npm publishing is possible by one person, [bdeitte](https://github.com/bdeitte), who has two-factor authentication enabled for publishes.  Publishes only contain one additional library, [unix-dgram](https://github.com/bnoordhuis/node-unix-dgram).
-
-## Name
-
-Why is this project named hot-shots?  Because:
-
-1. It's impossible to find another statsd name on npm
-2. It's the name of a dumb movie
-3. No good reason
 
 ## License
 

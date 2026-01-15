@@ -10,6 +10,7 @@ declare module "hot-shots" {
     cacheDnsTtl?: number;
     errorHandler?: (err: Error) => void;
     globalTags?: Tags;
+    includeDataDogTags?: boolean;
     globalize?: boolean;
     host?: string;
     isChild?: boolean;
@@ -33,6 +34,14 @@ declare module "hot-shots" {
     udsGracefulRestartRateLimit?: number;
     closingFlushInterval?: number;
     udpSocketOptions?: dgram.SocketOptions;
+    udsRetryOptions?: {
+      retries?: number;
+      retryDelayMs?: number;
+      maxRetryDelayMs?: number;
+      backoffFactor?: number;
+    };
+    includeDatadogTelemetry?: boolean;
+    telemetryFlushInterval?: number;
   }
 
   export interface ChildClientOptions {
@@ -126,6 +135,11 @@ declare module "hot-shots" {
     gauge(stat: string | string[], value: number, tags?: Tags, callback?: StatsCb): void;
     gauge(stat: string | string[], value: number, callback?: StatsCb): void;
     gauge(stat: string | string[], value: number, sampleRate?: number, callback?: StatsCb): void;
+
+    gaugeDelta(stat: string | string[], value: number, sampleRate?: number, tags?: Tags, callback?: StatsCb): void;
+    gaugeDelta(stat: string | string[], value: number, tags?: Tags, callback?: StatsCb): void;
+    gaugeDelta(stat: string | string[], value: number, callback?: StatsCb): void;
+    gaugeDelta(stat: string | string[], value: number, sampleRate?: number, callback?: StatsCb): void;
 
     set(stat: string | string[], value: number | string, sampleRate?: number, tags?: Tags, callback?: StatsCb): void;
     set(stat: string | string[], value: number | string, tags?: Tags, callback?: StatsCb): void;

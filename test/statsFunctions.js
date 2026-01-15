@@ -16,11 +16,12 @@ describe('#statsFunctions', () => {
 
   testTypes().forEach(([description, serverType, clientType, metricsEnd]) => {
     describe(description, () => {
-      [{ name: 'timing', unit: 'ms', bytes: 14 },
-      { name: 'histogram', unit: 'h', bytes: 12 },
-      { name: 'distribution', unit: 'd', bytes: 12 },
-      { name: 'gauge', unit: 'g', bytes: 12 },
-      { name: 'set', unit: 's', bytes: 12 },
+      [{ name: 'timing', unit: 'ms', bytes: 14, sign: '' },
+      { name: 'histogram', unit: 'h', bytes: 12, sign: '' },
+      { name: 'distribution', unit: 'd', bytes: 12, sign: '' },
+      { name: 'gauge', unit: 'g', bytes: 12, sign: '' },
+      { name: 'gaugeDelta', unit: 'g', bytes: 12, sign: '+' },
+      { name: 'set', unit: 's', bytes: 12, sign: '' },
       ].forEach(statFunction => {
 
         describe(`#${statFunction.name}`, () => {
@@ -30,18 +31,29 @@ describe('#statsFunctions', () => {
               statsd[statFunction.name]('test', 42);
             });
             server.on('metrics', metrics => {
-              assert.strictEqual(metrics, `test:42|${statFunction.unit}${metricsEnd}`);
+              assert.strictEqual(metrics, `test:${statFunction.sign}42|${statFunction.unit}${metricsEnd}`);
               done();
             });
           });
 
-          it(`should send proper ${statFunction.name} format with tags`, done => {
+          it(`should send proper ${statFunction.name} format with array tags`, done => {
             server = createServer(serverType, opts => {
               statsd = createHotShotsClient(opts, clientType);
               statsd[statFunction.name]('test', 42, ['foo', 'bar', 'gtag:gvalue1', 'gtag:gvalue2']);
             });
             server.on('metrics', metrics => {
-              assert.strictEqual(metrics, `test:42|${statFunction.unit}|#gtag:gvalue1,gtag:gvalue2,foo,bar${metricsEnd}`);
+              assert.strictEqual(metrics, `test:${statFunction.sign}42|${statFunction.unit}|#gtag:gvalue1,gtag:gvalue2,foo,bar${metricsEnd}`);
+              done();
+            });
+          });
+
+          it(`should send proper ${statFunction.name} format with object tags`, done => {
+            server = createServer(serverType, opts => {
+              statsd = createHotShotsClient(opts, clientType);
+              statsd[statFunction.name]('test', 42, { gtag:'gvalue1', gtag2:'gvalue2' });
+            });
+            server.on('metrics', metrics => {
+              assert.strictEqual(metrics, `test:${statFunction.sign}42|${statFunction.unit}|#gtag:gvalue1,gtag2:gvalue2${metricsEnd}`);
               done();
             });
           });
@@ -54,7 +66,7 @@ describe('#statsFunctions', () => {
               statsd[statFunction.name]('test', 42, ['foo', 'bar']);
             });
             server.on('metrics', metrics => {
-              assert.strictEqual(metrics, `test:42|${statFunction.unit}|#foo,bar${metricsEnd}`);
+              assert.strictEqual(metrics, `test:${statFunction.sign}42|${statFunction.unit}|#foo,bar${metricsEnd}`);
               done();
             });
           });
@@ -71,7 +83,7 @@ describe('#statsFunctions', () => {
               });
             });
             server.on('metrics', metrics => {
-              assert.strictEqual(metrics, `foo.test.bar:42|${statFunction.unit}|@0.5${metricsEnd}`);
+              assert.strictEqual(metrics, `foo.test.bar:${statFunction.sign}42|${statFunction.unit}|@0.5${metricsEnd}`);
               assert.strictEqual(called, true);
               done();
             });
@@ -91,7 +103,7 @@ describe('#statsFunctions', () => {
               });
             });
             server.on('metrics', metrics => {
-              assert.strictEqual(metrics, `a:42|${statFunction.unit}\nb:42|${statFunction.unit}\n`);
+              assert.strictEqual(metrics, `a:${statFunction.sign}42|${statFunction.unit}\nb:${statFunction.sign}42|${statFunction.unit}${metricsEnd}`);
               done();
             });
           });
@@ -102,7 +114,7 @@ describe('#statsFunctions', () => {
               statsd[statFunction.name]('test', 42, { foo: 'bar' });
             });
             server.on('metrics', metrics => {
-              assert.strictEqual(metrics, `test:42|${statFunction.unit}|#foo:bar${metricsEnd}`);
+              assert.strictEqual(metrics, `test:${statFunction.sign}42|${statFunction.unit}|#foo:bar${metricsEnd}`);
               done();
             });
           });
@@ -115,7 +127,7 @@ describe('#statsFunctions', () => {
               statsd[statFunction.name]('test', 42, { foo: 'bar' });
             });
             server.on('metrics', metrics => {
-              assert.strictEqual(metrics, `test,foo=bar:42|${statFunction.unit}${metricsEnd}`);
+              assert.strictEqual(metrics, `test,foo=bar:${statFunction.sign}42|${statFunction.unit}${metricsEnd}`);
               done();
             });
           });
@@ -235,9 +247,9 @@ describe('#statsFunctions', () => {
             });
           });
           server.on('metrics', metrics => {
-            assert.strictEqual(metrics, 'a:42|c\nb:42|c\n');
+            assert.strictEqual(metrics, `a:42|c\nb:42|c${metricsEnd}`);
             done();
-          });
+        });
         });
       });
 
@@ -319,10 +331,33 @@ describe('#statsFunctions', () => {
             });
           });
           server.on('metrics', metrics => {
-            assert.strictEqual(metrics, 'a:-42|c\nb:-42|c\n');
+            assert.strictEqual(metrics, `a:-42|c\nb:-42|c${metricsEnd}`);
             done();
-          });
         });
+        });
+      });
+    });
+  });
+
+  describe('gaugeDelta', () => {
+    it('Adds a plus sign when the value is positive', done => {
+      server = createServer('udp', opts => {
+        statsd = createHotShotsClient(opts, 'client');
+        statsd.gaugeDelta('test', 42);
+      });
+      server.on('metrics', metrics => {
+        assert.strictEqual(metrics, 'test:+42|g');
+        done();
+      });
+    });
+    it('Adds a minus sign when the value is negative', done => {
+      server = createServer('udp', opts => {
+        statsd = createHotShotsClient(opts, 'client');
+        statsd.gaugeDelta('test', -42);
+      });
+      server.on('metrics', metrics => {
+        assert.strictEqual(metrics, 'test:-42|g');
+        done();
       });
     });
   });
